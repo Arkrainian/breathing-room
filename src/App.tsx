@@ -129,8 +129,8 @@ export default function App() {
           <h1>Plan a clean-air room before wildfire smoke reaches your home.</h1>
           <p className="lede">
             Enter your town, one room, and the fans or purifiers you have. Breathing Room estimates how much smoke
-            will get into that room over the next five days, and how much more filtering would keep the air in the
-            Good range.
+            will get into that room over the next four to five days, and how much more filtering would keep the air
+            in the Good range.
           </p>
           <div className="evidence">
             <p>
