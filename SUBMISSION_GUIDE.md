@@ -43,12 +43,14 @@ Breathing Room helps families set up one room that stays safe to breathe during 
 **Problem:** Wildfire smoke caused an estimated 41,380 excess U.S. deaths a year from 2011 to 2020 (Qiu et al., *Nature*, 2025). Closing the windows isn't enough: in Seattle homes during the 2020 smoke, a third to three quarters of outdoor smoke still got inside (Xiang et al., 2021). EPA tells people to set up a clean room with an air cleaner sized for it, but gives only a static chart, so a family can't tell whether the box fan they own is enough for this week's forecast.
 
 **Main features:**
-- 5-day hourly PM2.5 forecast for any town, a manual reading, or a replay of the June 2023 New York smoke
+- Written for people with no background in air quality: a one-line answer, AQI numbers with category names, and a "What to do" list
+- Smoke forecast for any town, an air quality number from a weather app, or an example from the June 2023 New York smoke
+- Room size by picking "small bedroom," "living room," etc., with no measuring needed
+- Purifiers entered by the room size printed on the box, or homemade fan filters with EPA-measured performance
 - Indoor air model for one room, with and without air cleaners, hour by hour
-- Air cleaner presets using EPA-measured CADRs for five DIY designs
-- Verdict and recommendation: how many more cfm, or Corsi-Rosenthal boxes, keep the room Good
-- Interactive chart (mouse, touch, keyboard) with a table view
-- "Show the math" with the user's own numbers
+- Recommendation: how many homemade filter cubes, or what size purifier, keeps the room Good
+- Chart with labeled Good / Moderate / Unhealthy bands (mouse, touch, keyboard) and a table view
+- "More details" with the PM2.5 numbers and the equation with the user's own numbers
 - EPA clean room checklist, shareable link, printable plan
 
 **Tools and languages (the video must name these):** TypeScript, React, Vite, CSS, SVG; Vitest and Playwright for tests; GitHub Actions and GitHub Pages for deployment; Open-Meteo API for CAMS air quality data. Also name the AI assistant (Claude Code).
@@ -61,9 +63,9 @@ The rules require: participant names, app name, one-sentence purpose, target aud
 |---|---|---|
 | 0:00–0:15 | Face or title card | Your name(s), "Breathing Room," the one-sentence purpose. |
 | 0:15–0:35 | Landing page, evidence lines | The problem, using the three sourced facts. Who it's for. |
-| 0:35–1:20 | Load the June 2023 replay. Set a 12×11 ft bedroom, typical home, one box fan with one filter. | Walk through the verdict, the three peak numbers, and the chart (hover to show hours). |
-| 1:20–1:50 | Switch to "A reading I have," enter AQI 250. Show the warning verdict. Change the unit to a Corsi-Rosenthal box or raise "How many" until the verdict turns Good. | This is the core use: the app tells you what to buy or build. |
-| 1:50–2:20 | Open "Show the math." Briefly show `src/lib/model.ts` and the test run. | The equation, where the numbers come from, and how you tested it. |
+| 0:35–1:20 | Click "Show me an example." Pick "Medium bedroom," "About average," and one box fan with a filter. | Read the one-line answer, the three "smokiest time" numbers, and the chart (hover to show hours). |
+| 1:20–1:50 | Choose "I have an air quality number," enter 250. Show "What to do." Add the filter cube it suggests until the answer turns to "healthy to breathe." | This is the core use: the app tells you what to buy or build. |
+| 1:50–2:20 | Open "More details." Briefly show `src/lib/model.ts` and the test run. | The equation, where the numbers come from, and how you tested it. |
 | 2:20–2:45 | Limits section, checklist | The forecast grid is coarse; the model is a single room. What you would add next (your own work). |
 | 2:45–3:00 | Tools slide | TypeScript, React, Vite, Vitest, Playwright, GitHub Pages, Open-Meteo; AI assistance disclosed. |
 
@@ -77,11 +79,11 @@ Personalize this. Do not describe experiences or motivations that aren't yours.
 >
 > Wildfire smoke is linked to about 41,000 deaths a year in the U.S. EPA tells people to make a "clean room" with an air cleaner, but it doesn't tell you whether the fan you already have is enough for the smoke that's coming.
 >
-> [Load the replay.] This is real model data from June 2023, when Canadian smoke covered New York. I'll describe my bedroom: 12 by 11 feet, a normal house, and one box fan with a furnace filter taped on. [Point to results.] With the windows shut and nothing running, the room would peak here. With the fan, it peaks here, and the chart shows every hour.
+> [Click "Show me an example."] This is real model data from June 2023, when Canadian smoke covered New York. I pick a medium bedroom and one box fan with a furnace filter taped on. No measuring, no technical terms. [Point to results.] The app answers in one line, then shows how bad it gets outside, in the room with the windows shut, and in the room with the fan.
 >
-> Now say my local AirNow reading is AQI 250. [Enter it.] The app says my one fan isn't enough and that I need about [X] more cfm, roughly one Corsi-Rosenthal box. [Add it.] Now the room stays in the Good range.
+> Now say my weather app shows an air quality of 250. [Enter it.] The app says my room needs more air cleaning, and tells me exactly what to add: [one filter cube, or a purifier made for at least N square feet]. [Add it.] Now the room stays healthy to breathe.
 >
-> Under the hood, the room is modeled with a differential equation from a study of Seattle homes during wildfire smoke. [Open the math.] The app solves it in five-minute steps against the hourly forecast. I tested it with [N] unit tests and [N] browser tests.
+> Under the hood, the room is modeled with a differential equation from a study of Seattle homes during wildfire smoke. [Open More details.] The app solves it in five-minute steps against the hourly forecast. I tested it with [N] unit tests and [N] browser tests.
 >
 > It has limits. The forecast grid is 45 kilometers wide, so local smoke can be worse, and you can type in a local reading instead. [Your 2.0 plans / your own validation results.]
 >

@@ -11,9 +11,9 @@ interface Props {
 }
 
 const MODES: { id: Mode; label: string }[] = [
-  { id: 'forecast', label: 'Forecast for a place' },
-  { id: 'manual', label: 'A reading I have' },
-  { id: 'replay', label: 'Past smoke event' },
+  { id: 'forecast', label: 'Find my town' },
+  { id: 'manual', label: 'I have an air quality number' },
+  { id: 'replay', label: 'Show an example' },
 ]
 
 export function OutdoorStep({ source, onChange }: Props) {
@@ -29,9 +29,9 @@ export function OutdoorStep({ source, onChange }: Props) {
     <fieldset className="step">
       <legend>
         <span className="step-num" aria-hidden="true">1</span>
-        Outdoor air
+        Where do you live?
       </legend>
-      <p className="step-help">Where will the smoke numbers come from?</p>
+      <p className="step-help">We look up the smoke forecast for your area for the next few days.</p>
 
       <div className="segmented" role="radiogroup" aria-label="Source of outdoor air data">
         {MODES.map((m) => (
@@ -53,11 +53,11 @@ export function OutdoorStep({ source, onChange }: Props) {
       {mode === 'replay' && (
         <div className="mode-panel">
           <p>
-            Replays hourly PM2.5 for New York City from June 5 to 9, 2023, when smoke from fires in Quebec turned
-            the sky orange. Useful when the air outside is clean and you want to see how a setup holds up.
+            No smoke where you live right now? See how your room would have done in New York City on June 5–9,
+            2023, when smoke from Canadian wildfires turned the sky orange.
           </p>
           <button type="button" className="btn" onClick={() => onChange({ kind: 'replay' })}>
-            {source?.kind === 'replay' ? 'Reload the replay' : 'Load the replay'}
+            {source?.kind === 'replay' ? 'Show the example again' : 'Show the example'}
           </button>
         </div>
       )}
@@ -76,7 +76,7 @@ function ForecastPicker({ source, onChange }: Props) {
   async function search(e: FormEvent) {
     e.preventDefault()
     if (query.trim().length < 2) {
-      setError('Type at least two letters of a city or town name.')
+      setError('Type the name of your city or town.')
       return
     }
     abortRef.current?.abort()
@@ -87,7 +87,7 @@ function ForecastPicker({ source, onChange }: Props) {
     try {
       const places = await searchPlaces(query, ctrl.signal)
       setResults(places)
-      if (places.length === 0) setError(`No places matched “${query.trim()}”. Try the nearest larger town.`)
+      if (places.length === 0) setError(`We couldn’t find “${query.trim()}”. Check the spelling, or try a nearby larger town.`)
     } catch (err) {
       if ((err as Error).name === 'AbortError') return
       setError(err instanceof ApiError ? err.message : 'Search failed. Try again.')
@@ -124,7 +124,7 @@ function ForecastPicker({ source, onChange }: Props) {
     <div className="mode-panel">
       {current && (
         <p className="current-choice">
-          Showing the forecast for <strong>{placeLabel(current)}</strong>.
+          Using the smoke forecast for <strong>{placeLabel(current)}</strong>.
         </p>
       )}
       <form className="inline-form" onSubmit={search} role="search">
@@ -149,7 +149,7 @@ function ForecastPicker({ source, onChange }: Props) {
       <button type="button" className="btn-link" onClick={useMyLocation} disabled={busy}>
         Use my current location
       </button>
-      <p className="fine">Your location is sent only to Open-Meteo to look up the forecast. Nothing is stored on a server.</p>
+      <p className="fine">Your town is only used to look up the forecast. We don’t store it anywhere.</p>
       {error && (
         <p id="place-error" className="error" role="alert">
           {error}
@@ -179,7 +179,7 @@ function ForecastPicker({ source, onChange }: Props) {
 
 function ManualReading({ source, onChange }: Props) {
   const [value, setValue] = useState(source?.kind === 'manual' ? String(source.pm) : '')
-  const [unit, setUnit] = useState<'pm' | 'aqi'>('pm')
+  const [unit, setUnit] = useState<'pm' | 'aqi'>(source?.kind === 'manual' ? 'pm' : 'aqi')
   const [error, setError] = useState<string | null>(null)
 
   function submit(e: FormEvent) {
@@ -191,7 +191,7 @@ function ManualReading({ source, onChange }: Props) {
     }
     const max = unit === 'pm' ? 1000 : 500
     if (n < 0 || n > max) {
-      setError(unit === 'pm' ? 'PM2.5 should be between 0 and 1000 µg/m³.' : 'AQI runs from 0 to 500.')
+      setError(unit === 'pm' ? 'PM2.5 should be between 0 and 1000 µg/m³.' : 'The air quality number goes from 0 to 500.')
       return
     }
     setError(null)
@@ -201,12 +201,13 @@ function ManualReading({ source, onChange }: Props) {
   return (
     <form className="mode-panel" onSubmit={submit} noValidate>
       <p>
-        Use a number from <a href="https://www.airnow.gov/" target="_blank" rel="noreferrer">AirNow.gov</a>, the{' '}
-        <a href="https://fire.airnow.gov/" target="_blank" rel="noreferrer">Fire and Smoke Map</a>, or your own sensor.
-        The planner holds it steady for 48 hours, which makes it a worst case.
+        Type the air quality number (AQI) from your weather app,{' '}
+        <a href="https://www.airnow.gov/" target="_blank" rel="noreferrer">AirNow.gov</a>, or the{' '}
+        <a href="https://fire.airnow.gov/" target="_blank" rel="noreferrer">Fire and Smoke Map</a>. We’ll assume it
+        stays that bad for two days.
       </p>
       <label htmlFor="manual-v" className="field-label">
-        Outdoor reading
+        Air quality number outside
       </label>
       <div className="inline-row">
         <input
@@ -218,11 +219,11 @@ function ManualReading({ source, onChange }: Props) {
           aria-describedby={error ? 'manual-error' : undefined}
         />
         <select aria-label="Reading unit" value={unit} onChange={(e) => setUnit(e.target.value as 'pm' | 'aqi')}>
-          <option value="pm">PM2.5 µg/m³</option>
-          <option value="aqi">AQI</option>
+          <option value="aqi">AQI (0–500)</option>
+          <option value="pm">PM2.5 (µg/m³)</option>
         </select>
         <button type="submit" className="btn">
-          Use reading
+          Use this number
         </button>
       </div>
       {error && (

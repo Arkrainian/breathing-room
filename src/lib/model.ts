@@ -29,9 +29,9 @@ export interface RoomParams {
 
 /** Leakiness presets. The values sit inside the 0.30–1.41 /h range measured by Xiang et al. (2021). */
 export const LEAKINESS = {
-  tight: { label: 'Newer or weather-sealed', airExchange: 0.3 },
-  average: { label: 'Typical home', airExchange: 0.6 },
-  leaky: { label: 'Older or drafty', airExchange: 1.2 },
+  tight: { label: 'Well sealed', hint: 'Newer home, or windows and doors close tightly', airExchange: 0.3 },
+  average: { label: 'About average', hint: 'Not sure? Pick this one', airExchange: 0.6 },
+  leaky: { label: 'Drafty', hint: 'Older home, or you can feel air near windows and doors', airExchange: 1.2 },
 } as const
 
 export type Leakiness = keyof typeof LEAKINESS

@@ -77,3 +77,8 @@ export function aqiToPm(aqi: number): number {
   const pm = ((cat.pmHigh - cat.pmLow) / (cat.aqiHigh - cat.aqiLow)) * (a - cat.aqiLow) + cat.pmLow
   return Math.round(pm * 10) / 10
 }
+
+/** AQI as people see it in weather apps: a whole number, "500+" past the top of the scale. */
+export function aqiLabel(pm: number): string {
+  return Math.floor(Math.max(0, pm) * 10) / 10 > 325.4 ? '500+' : String(pmToAqi(pm))
+}

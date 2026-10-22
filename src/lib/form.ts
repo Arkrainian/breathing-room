@@ -4,7 +4,7 @@
 // "1." don't get rewritten under their cursor. validateForm() turns them into
 // numbers and returns a plain-language message for each field that is wrong.
 
-import { type Device, type DeviceKind, DEVICE_PRESETS, presetFor } from './devices'
+import { cadrFromRoomSize, type Device, type DeviceKind, DEVICE_PRESETS, presetFor } from './devices'
 import { DEFAULT_DEPOSITION, DEFAULT_PENETRATION, LEAKINESS, type Leakiness, type RoomParams } from './model'
 import type { Place } from './api'
 
@@ -13,7 +13,19 @@ export interface DeviceRow {
   kind: DeviceKind
   cadr: string
   count: string
+  /** For store-bought purifiers: which number from the label the person typed in. */
+  labelMode?: 'area' | 'cadr'
+  /** Recommended room size from the purifier's label, ft². Used when labelMode is 'area'. */
+  roomSize?: string
 }
+
+/** Common room sizes, so people don't have to measure before trying the tool. */
+export const ROOM_PRESETS = [
+  { id: 'small', label: 'Small bedroom', hint: 'about 10 × 10 ft', lengthFt: '10', widthFt: '10' },
+  { id: 'medium', label: 'Medium bedroom', hint: 'about 12 × 12 ft', lengthFt: '12', widthFt: '12' },
+  { id: 'large', label: 'Large bedroom', hint: 'about 14 × 16 ft', lengthFt: '14', widthFt: '16' },
+  { id: 'living', label: 'Living room', hint: 'about 16 × 20 ft', lengthFt: '16', widthFt: '20' },
+] as const
 
 export interface FormState {
   lengthFt: string
@@ -36,13 +48,18 @@ let nextId = 1
 export function newDeviceRow(kind: DeviceKind = 'cr-box-4', cadr?: number, count = 1): DeviceRow {
   const preset = presetFor(kind)
   const value = cadr ?? preset.cadrCfm
-  return { id: `d${nextId++}`, kind, cadr: value == null ? '' : String(value), count: String(count) }
+  const row: DeviceRow = { id: `d${nextId++}`, kind, cadr: value == null ? '' : String(value), count: String(count) }
+  if (kind === 'purifier') {
+    row.labelMode = cadr == null ? 'area' : 'cadr'
+    row.roomSize = ''
+  }
+  return row
 }
 
 export function defaultForm(): FormState {
   return {
     lengthFt: '12',
-    widthFt: '11',
+    widthFt: '12',
     heightFt: '8',
     leakiness: 'average',
     customAch: '0.6',
@@ -105,7 +122,13 @@ export function validateForm(form: FormState): Validated {
 
   const devices: Device[] = []
   form.devices.forEach((row) => {
-    const cadr = checkRange(errors, `${row.id}-cadr`, row.cadr, 'CADR', 10, 2000, ' cfm')
+    let cadr: number | null
+    if (row.kind === 'purifier' && row.labelMode === 'area') {
+      const area = checkRange(errors, `${row.id}-area`, row.roomSize ?? '', 'room size from the label', 50, 3000, ' sq ft')
+      cadr = area === null ? null : cadrFromRoomSize(area)
+    } else {
+      cadr = checkRange(errors, `${row.id}-cadr`, row.cadr, 'CADR', 10, 2000, ' cfm')
+    }
     const count = checkRange(errors, `${row.id}-count`, row.count, 'number of units', 1, 10, '', true)
     if (cadr !== null && count !== null) devices.push({ id: row.id, kind: row.kind, cadrCfm: cadr, count })
   })
@@ -133,13 +156,22 @@ export type SourceRef =
 const KINDS = new Set<string>(DEVICE_PRESETS.map((d) => d.kind))
 const LEAK_KEYS = new Set<string>([...Object.keys(LEAKINESS), 'custom'])
 
+/** Links always carry the CADR, even when the person typed the label's room size. */
+function shareCadr(d: DeviceRow): string {
+  if (d.kind === 'purifier' && d.labelMode === 'area') {
+    const area = parseNumber(d.roomSize ?? '')
+    return area === null ? '' : String(cadrFromRoomSize(area))
+  }
+  return d.cadr.trim()
+}
+
 export function encodeShare(form: FormState, source: SourceRef | null): string {
   const p = new URLSearchParams()
   p.set('room', [form.lengthFt, form.widthFt, form.heightFt].map((s) => s.trim()).join('x'))
   p.set('leak', form.leakiness)
   if (form.leakiness === 'custom') p.set('ach', form.customAch.trim())
   if (form.devices.length) {
-    p.set('dev', form.devices.map((d) => `${d.kind}.${d.cadr.trim()}.${d.count.trim()}`).join('~'))
+    p.set('dev', form.devices.map((d) => `${d.kind}.${shareCadr(d)}.${d.count.trim()}`).join('~'))
   }
   if (source?.kind === 'forecast') {
     const { place } = source
@@ -181,7 +213,12 @@ export function decodeShare(query: string): Decoded | null {
       const kind = pieces[0]
       if (pieces.length < 3 || !KINDS.has(kind)) continue
       const row = newDeviceRow(kind as DeviceKind)
-      form.devices.push({ ...row, cadr: pieces.slice(1, -1).join('.'), count: pieces[pieces.length - 1] })
+      form.devices.push({
+        ...row,
+        cadr: pieces.slice(1, -1).join('.'),
+        count: pieces[pieces.length - 1],
+        ...(kind === 'purifier' ? { labelMode: 'cadr' as const } : {}),
+      })
     }
   }
 

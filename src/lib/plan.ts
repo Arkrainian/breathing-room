@@ -2,7 +2,7 @@
 // Everything here is pure so it can be unit tested without a browser.
 
 import { AQI_CATEGORIES, type AqiCategoryId, categoryForPm } from './aqi'
-import { CR_BOX_CFM, type Device, totalCadr } from './devices'
+import { CR_BOX_CFM, type Device, roomSizeForCadr, totalCadr } from './devices'
 import {
   cadrForTarget,
   cleanerAch,
@@ -51,6 +51,8 @@ export interface PlanResult {
   extraCadrCfm: number
   /** Extra four-filter Corsi-Rosenthal boxes that would cover `extraCadrCfm`. */
   extraCrBoxes: number
+  /** Smallest "recommended room size" label (ft², rounded up to 50) on a purifier that would cover `extraCadrCfm`. */
+  extraPurifierSqFt: number
 }
 
 export function computePlan(outdoor: readonly number[], room: RoomParams, devices: readonly Device[]): PlanResult {
@@ -84,5 +86,6 @@ export function computePlan(outdoor: readonly number[], room: RoomParams, device
     cadrForTargetCfm: needed,
     extraCadrCfm: extra,
     extraCrBoxes: extra > 0 ? Math.ceil(extra / CR_BOX_CFM) : 0,
+    extraPurifierSqFt: extra > 0 ? Math.ceil(roomSizeForCadr(extra) / 50) * 50 : 0,
   }
 }

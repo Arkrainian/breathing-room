@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aqiToPm, categoryForPm, pmToAqi } from './aqi'
+import { aqiLabel, aqiToPm, categoryForPm, pmToAqi } from './aqi'
 
 describe('PM2.5 to AQI (2024 breakpoints)', () => {
   it.each([
@@ -46,5 +46,13 @@ describe('AQI to PM2.5', () => {
     for (const aqi of [12, 75, 120, 180, 250, 400]) {
       expect(Math.abs(pmToAqi(aqiToPm(aqi)) - aqi)).toBeLessThanOrEqual(1)
     }
+  })
+})
+
+describe('aqiLabel', () => {
+  it('shows whole numbers and 500+ past the scale', () => {
+    expect(aqiLabel(9)).toBe('50')
+    expect(aqiLabel(325.4)).toBe('500')
+    expect(aqiLabel(400)).toBe('500+')
   })
 })

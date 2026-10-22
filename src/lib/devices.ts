@@ -20,50 +20,68 @@ export type DeviceKind =
 
 export interface DevicePreset {
   kind: DeviceKind
+  /** Plain-language name shown in the form. */
   name: string
   /** Clean air delivery rate in cubic feet per minute, or null when the user must supply it. */
   cadrCfm: number | null
+  /** One plain sentence on what it is or how to build it. */
   detail: string
 }
 
 export const DEVICE_PRESETS: readonly DevicePreset[] = [
   {
     kind: 'purifier',
-    name: 'Store-bought air purifier',
+    name: 'Air purifier from a store',
     cadrCfm: null,
-    detail: 'Enter the smoke CADR from the label or the AHAM Verifide directory.',
+    detail: 'Check the box or label for the room size it is made for, or its smoke CADR number.',
   },
   {
     kind: 'box-fan-1',
-    name: 'Box fan + one 1-inch MERV 13 filter',
+    name: 'Box fan with a furnace filter taped on',
     cadrCfm: 111,
-    detail: 'Filter taped to the intake side. EPA chamber test: 111 cfm.',
+    detail: 'The simplest homemade option. Tape a MERV 13 filter, the same size as the fan, to the back.',
   },
   {
     kind: 'box-fan-shroud',
-    name: 'Box fan + 1-inch filter + cardboard shroud',
+    name: 'Box fan, filter, and a cardboard cover over the fan corners',
     cadrCfm: 156,
-    detail: 'Cardboard over the fan corners stops air leaking backward. EPA test: 156 cfm.',
+    detail: 'The cardboard stops air from leaking around the fan blades, so more air goes through the filter.',
   },
   {
     kind: 'box-fan-4in',
-    name: 'Box fan + one 4-inch MERV 13 filter',
+    name: 'Box fan with a thick (4-inch) filter',
     cadrCfm: 248,
-    detail: 'Thicker filter, lower resistance. EPA test: 248 cfm.',
+    detail: 'A thicker filter lets more air through, so it cleans faster.',
   },
   {
     kind: 'wedge-2',
-    name: 'Two-filter wedge with shroud',
+    name: 'Box fan with two filters in a V shape',
     cadrCfm: 263,
-    detail: 'Two 1-inch filters in a V shape. EPA test: 263 cfm.',
+    detail: 'Two filters taped together in a V, with the fan on the open side.',
   },
   {
     kind: 'cr-box-4',
-    name: 'Corsi-Rosenthal box (four filters)',
+    name: 'Filter cube (four filters with a box fan on top)',
     cadrCfm: 401,
-    detail: 'Four 1-inch MERV 13 filters taped into a cube, fan on top. EPA test: 401 cfm.',
+    detail: 'Also called a Corsi-Rosenthal box. The strongest homemade option EPA tested.',
   },
 ]
+
+/**
+ * EPA's sizing chart pairs 65 cfm of smoke CADR with every 100 ft² of floor
+ * (8-foot ceiling). Purifier boxes list a recommended room size based on the
+ * same idea, so we convert in both directions with that ratio.
+ * Source: EPA, "Guide to Air Cleaners in the Home."
+ */
+export const CFM_PER_FT2 = 0.65
+
+export function cadrFromRoomSize(areaFt2: number): number {
+  return Math.round(areaFt2 * CFM_PER_FT2)
+}
+
+export function roomSizeForCadr(cadrCfm: number): number {
+  return cadrCfm / CFM_PER_FT2
+}
 
 export function presetFor(kind: DeviceKind): DevicePreset {
   const p = DEVICE_PRESETS.find((d) => d.kind === kind)

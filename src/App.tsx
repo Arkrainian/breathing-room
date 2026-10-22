@@ -64,7 +64,7 @@ export default function App() {
           error:
             err instanceof ApiError || err instanceof InsufficientDataError
               ? err.message
-              : 'Something went wrong loading air quality data.',
+              : 'Something went wrong getting the forecast. Try again.',
         })
       })
     return () => ctrl.abort()
@@ -95,7 +95,7 @@ export default function App() {
     const url = window.location.href
     try {
       await navigator.clipboard.writeText(url)
-      setShareStatus('Link copied. It holds your room, cleaners, and town, nothing else.')
+      setShareStatus('Link copied. Paste it in a text or email to share this plan.')
     } catch {
       setShareStatus(`Copy this link: ${url}`)
     }
@@ -116,7 +116,7 @@ export default function App() {
             Breathing Room
           </a>
           <nav aria-label="Sections">
-            <a href="#plan">Planner</a>
+            <a href="#plan">Make a plan</a>
             <a href="#checklist">Checklist</a>
             <a href="#method">How it works</a>
             <a href="#sources">Sources</a>
@@ -126,23 +126,37 @@ export default function App() {
 
       <main id="top">
         <section className="intro wrap">
-          <h1>Plan a clean-air room before wildfire smoke reaches your home.</h1>
+          <h1>Make one room in your home safe to breathe during wildfire smoke.</h1>
           <p className="lede">
-            Enter your town, one room, and the fans or purifiers you have. Breathing Room estimates how much smoke
-            will get into that room over the next four to five days, and how much more filtering would keep the air
-            in the Good range.
+            Smoke gets inside even with the windows closed. Tell us where you live, which room you’ll use, and what
+            fans or air purifiers you have. We’ll show how smoky that room will get over the next few days, and what
+            to add if it isn’t enough.
           </p>
+          <ol className="how-steps" aria-label="How it works">
+            <li>
+              <strong>Where you live</strong>
+              <span>We look up the smoke forecast.</span>
+            </li>
+            <li>
+              <strong>Your room</strong>
+              <span>Pick a size. No measuring needed.</span>
+            </li>
+            <li>
+              <strong>Your air cleaners</strong>
+              <span>A purifier, or a box fan with a filter.</span>
+            </li>
+          </ol>
           <div className="evidence">
             <p>
-              Smoke from wildfires caused an estimated <strong>41,000 excess deaths a year</strong> in the United States
-              from 2011 to 2020<a href="#src-1" className="cite">1</a>. On June 7, 2023, as Canadian smoke covered
-              New York, asthma emergency visits across the state outside New York City rose{' '}
-              <strong>82%</strong> over the June 1–5 average<a href="#src-2" className="cite">2</a>.
+              Wildfire smoke is linked to an estimated <strong>41,000 deaths a year</strong> in the United States
+              <a href="#src-1" className="cite">1</a>. When Canadian smoke covered New York on June 7, 2023, asthma
+              emergency room visits in the state outside New York City rose <strong>82%</strong> compared with June
+              1–5<a href="#src-2" className="cite">2</a>.
             </p>
             <p>
-              In Seattle homes during the 2020 smoke, between a third and three quarters of the outdoor smoke still got
-              inside with the windows shut<a href="#src-3" className="cite">3</a>.
-              An air cleaner sized for the room cuts that sharply, and even a furnace filter taped to a box fan counts.
+              In Seattle homes during the 2020 smoke, between a third and three quarters of the smoke outside still got
+              in with the windows shut<a href="#src-3" className="cite">3</a>. An air purifier, or even a furnace
+              filter taped to a box fan, can clean the air in one room if it is big enough for that room.
             </p>
           </div>
         </section>
@@ -157,7 +171,7 @@ export default function App() {
           <aside className="results-col" aria-live="polite" aria-labelledby="results-title">
             {hasErrors && shown && (
               <p className="notice" role="alert">
-                Fix the highlighted fields to update the results. Showing your last valid plan.
+                Something in the form needs fixing (marked in red). The results below are from before that change.
               </p>
             )}
             {error && (
@@ -170,20 +184,19 @@ export default function App() {
             )}
             {!shown && loading && (
               <p className="results-empty" role="status">
-                Loading hourly air quality data…
+                Looking up the smoke forecast…
               </p>
             )}
             {!shown && !loading && !error && (
               <div className="results-empty">
-                <h2 id="results-title">Your results will appear here</h2>
+                <h2 id="results-title">Your answer will show up here</h2>
                 <p>
-                  Choose where the outdoor air numbers come from in step 1. You will see an hour-by-hour estimate for
-                  your room, the hours it spends in each air quality category, and what it would take to keep it in
-                  the Good range.
+                  Start with step 1: search for your town. You’ll find out whether your room will stay healthy to
+                  breathe, and what to add if it won’t.
                 </p>
-                <p>No smoke where you are right now? Load a real event to see how a setup holds up.</p>
+                <p>Want to see how it works first? Try it with real smoke from June 2023 in New York City.</p>
                 <button type="button" className="btn" onClick={() => setSource({ kind: 'replay' })}>
-                  Replay the June 2023 New York smoke
+                  Show me an example
                 </button>
               </div>
             )}

@@ -31,7 +31,7 @@ describe('cleanHourly', () => {
   })
 
   it('refuses a series that is mostly gaps', () => {
-    expect(() => cleanHourly(hours(8), [1, null, null, null, 5, 6, 7, 8])).toThrow(/too few/)
+    expect(() => cleanHourly(hours(8), [1, null, null, null, 5, 6, 7, 8])).toThrow(/Too much of the forecast is missing/)
   })
 })
 
@@ -96,10 +96,29 @@ describe('form validation', () => {
     expect(Object.values(v.errors)[0]).toMatch(/whole number/)
   })
 
-  it('needs a CADR for a store-bought purifier', () => {
+  it('asks a store-bought purifier for the room size on its label by default', () => {
     const f = defaultForm()
     f.devices = [newDeviceRow('purifier')]
+    expect(Object.values(validateForm(f).errors)[0]).toBe('Enter the room size from the label.')
+  })
+
+  it('turns a label room size into a CADR with the EPA ratio', () => {
+    const f = defaultForm()
+    f.devices = [{ ...newDeviceRow('purifier'), roomSize: '300' }]
+    expect(validateForm(f).devices?.[0].cadrCfm).toBe(195)
+  })
+
+  it('uses the typed CADR when the label gives one', () => {
+    const f = defaultForm()
+    f.devices = [{ ...newDeviceRow('purifier'), labelMode: 'cadr', cadr: '' }]
     expect(Object.values(validateForm(f).errors)[0]).toBe('Enter the CADR.')
+  })
+
+  it('share links carry the converted CADR for label-size purifiers', () => {
+    const f = defaultForm()
+    f.devices = [{ ...newDeviceRow('purifier'), roomSize: '300' }]
+    const d = decodeShare(encodeShare(f, null))
+    expect(d?.form.devices[0]).toMatchObject({ kind: 'purifier', cadr: '195', labelMode: 'cadr' })
   })
 
   it('validates a custom air exchange rate', () => {
@@ -177,6 +196,13 @@ describe('computePlan', () => {
     expect(fixed.plan.peak).toBeLessThanOrEqual(TARGET_PM + 1e-9)
     expect(fixed.extraCadrCfm).toBeCloseTo(0, 6)
     expect(fixed.extraCrBoxes).toBe(0)
+  })
+
+  it('expresses the shortfall as a purifier label size, rounded up to 50 sq ft', () => {
+    const r = computePlan(smoke, room, [])
+    expect(r.extraPurifierSqFt % 50).toBe(0)
+    expect(r.extraPurifierSqFt * 0.65).toBeGreaterThanOrEqual(r.extraCadrCfm)
+    expect((r.extraPurifierSqFt - 50) * 0.65).toBeLessThan(r.extraCadrCfm)
   })
 
   it('flags whether the plan meets EPA sizing', () => {

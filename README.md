@@ -24,15 +24,14 @@ EPA's advice is to create a "clean room" with a portable air cleaner sized for t
    - the 5-day hourly PM2.5 forecast for any town (CAMS via Open-Meteo),
    - a reading you already have (PM2.5 or AQI from AirNow, PurpleAir, or your own sensor), held steady for 48 hours as a worst case,
    - a replay of the June 5–9, 2023 New York smoke, so the tool can be demonstrated when the air outside is clean.
-2. **The room.** Length, width, ceiling height, and how drafty the building is.
-3. **Air cleaners.** Any mix of store-bought purifiers (enter the smoke CADR) and five DIY designs with CADRs measured by EPA researchers.
-4. **Results.**
-   - A plain-language verdict, including how many more cfm (or Corsi-Rosenthal boxes) would keep the room Good through the worst hour.
-   - Peak PM2.5 outdoors, in the room with no cleaner, and in the room with your cleaners, each with its AQI category.
-   - An hour-by-hour chart of all three, readable by mouse, touch, or keyboard, with a table view.
-   - Hours spent in each AQI category, for each scenario.
-   - Whether the setup meets EPA's sizing chart, the share of outdoor smoke kept out, and how long the room takes to clear after switching on.
-   - "Show the math": the equation with your room's numbers plugged in.
+2. **The room.** Pick a size (small, medium, or large bedroom, or living room) or enter exact dimensions, then say how drafty the home feels.
+3. **Air cleaners.** Any mix of store-bought purifiers and five homemade fan-filter designs. For a purifier, people can type the room size printed on the box ("for rooms up to 300 sq ft"), which the app converts with EPA's sizing ratio, or the smoke CADR if they know it.
+4. **Results**, written for someone with no background in air quality:
+   - A one-line answer ("Your room will stay healthy to breathe" / "Your room needs more air cleaning") and a sentence explaining it.
+   - The worst-hour air quality index (the 0–500 number weather apps show) outside, in the room with windows closed, and in the room with the air cleaners, each with its category name.
+   - "What to do": how many homemade filter cubes, or what size of purifier, would keep the room in the Good range, plus the key steps from EPA's guidance.
+   - An hour-by-hour chart on the AQI scale with labeled Good / Moderate / Unhealthy bands, readable by mouse, touch, or keyboard, with a table view.
+   - A closed "More details" section with PM2.5 values, hours per category, EPA sizing check, and the equation with the room's numbers plugged in.
 5. **Checklist.** EPA's clean room steps, split into before, during, and after smoke. Ticks are saved in the browser.
 6. **Share and print.** The whole plan lives in the URL, so it can be bookmarked or texted to a relative. A print stylesheet produces a paper copy.
 
@@ -147,8 +146,8 @@ If you fork or rename the repository, change `base` in `vite.config.ts` to `/<ne
 
 Status as of October 22, 2026:
 
-- **Unit tests (Vitest): 55 passing.** They check the model against its closed-form solutions, the AQI breakpoints at every boundary, gap filling, input validation, share-link round trips, and that the recommended CADR keeps the simulated room under the target.
-- **Browser tests (Playwright): 13 tests × 2 viewports (desktop Chrome, Pixel 7) = 26 passing.** They cover the empty state, replay, place search, no-result search, a service outage with retry, invalid inputs, manual AQI entry, shared links, adding and removing cleaners, keyboard chart reading, checklist persistence, horizontal overflow (including a 320 px screen), and an axe-core WCAG 2.1 AA scan. Network calls are stubbed with fixed data so results don't depend on the weather.
+- **Unit tests (Vitest): 60 passing.** They check the model against its closed-form solutions, the AQI breakpoints at every boundary, gap filling, input validation, share-link round trips, and that the recommended CADR keeps the simulated room under the target.
+- **Browser tests (Playwright): 15 tests × 2 viewports (desktop Chrome, Pixel 7) = 30 passing.** They cover the empty state, the example, place search, no-result search, a service outage with retry, invalid inputs, manual AQI entry, shared links, room-size presets, entering a purifier by its label's room size, adding and removing cleaners, keyboard chart reading, checklist persistence, horizontal overflow (including a 320 px screen), and an axe-core WCAG 2.1 AA scan. Network calls are stubbed with fixed data so results don't depend on the weather.
 - **Manual checks:** screenshots of desktop light, desktop dark, and mobile layouts against the live Open-Meteo API, with no console errors.
 
 Not tested: Safari and Firefox (only Chromium was automated), real screen readers (axe catches many but not all problems), and printing on paper.

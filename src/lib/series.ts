@@ -32,14 +32,14 @@ export function cleanHourly(times: readonly string[], raw: readonly unknown[]): 
   let last = n - 1
   while (last >= first && !isUsable(raw[last])) last--
 
-  if (first > last) throw new InsufficientDataError('The forecast came back empty for this location.')
+  if (first > last) throw new InsufficientDataError('There’s no smoke forecast for this place. Try a nearby larger town.')
 
   const span = last - first + 1
   let missing = 0
   for (let i = first; i <= last; i++) if (!isUsable(raw[i])) missing++
   if (span < 6 || missing / span > MAX_MISSING_SHARE) {
     throw new InsufficientDataError(
-      `Only ${span - missing} of ${span} hours have data here, which is too few to model.`,
+      `Too much of the forecast is missing here (${missing} of ${span} hours). Try a nearby larger town.`,
     )
   }
 

@@ -1,30 +1,26 @@
 import { type KeyboardEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { AQI_CATEGORIES, categoryForPm } from '../lib/aqi'
-import { fmtDay, fmtDayHour, fmtPm, parseLocal } from '../lib/format'
+import { AQI_CATEGORIES, aqiLabel, categoryForPm, pmToAqi } from '../lib/aqi'
+import { fmtDay, fmtDayHour, parseLocal } from '../lib/format'
 
 interface Props {
   times: string[]
+  /** Hourly PM2.5, µg/m³. The chart converts to AQI for display. */
   outdoor: number[]
   none: number[]
   plan: number[]
 }
 
 const HEIGHT = 300
-const M = { top: 12, right: 12, bottom: 30, left: 40 }
+const M = { top: 10, right: 12, bottom: 30, left: 40 }
 
 const SERIES = [
-  { key: 'outdoor', label: 'Outdoors', cls: 'line-outdoor' },
-  { key: 'none', label: 'Room, windows shut, no cleaner', cls: 'line-none' },
-  { key: 'plan', label: 'Room with your air cleaners', cls: 'line-plan' },
+  { key: 'outdoor', label: 'Outside', cls: 'line-outdoor' },
+  { key: 'none', label: 'Your room, windows closed', cls: 'line-none' },
+  { key: 'plan', label: 'Your room with your air cleaners', cls: 'line-plan' },
 ] as const
 
-/** Rounds the axis maximum up to a clean number so ticks land on round values. */
-function niceMax(v: number): { max: number; step: number } {
-  const raw = Math.max(v, 10) / 4
-  const mag = 10 ** Math.floor(Math.log10(raw))
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag
-  return { max: step * Math.ceil(Math.max(v, 10) / step), step }
-}
+/** AQI category edges. The y-axis stops at the first edge above the data. */
+const EDGES = [50, 100, 150, 200, 300, 500]
 
 function pathFor(values: number[], x: (i: number) => number, y: (v: number) => number): string {
   return values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('')
@@ -44,24 +40,31 @@ export function ExposureChart({ times, outdoor, none, plan }: Props) {
     return () => ro.disconnect()
   }, [])
 
+  const aqi = useMemo(
+    () => ({ outdoor: outdoor.map(pmToAqi), none: none.map(pmToAqi), plan: plan.map(pmToAqi) }),
+    [outdoor, none, plan],
+  )
+  const top = useMemo(() => {
+    const peak = Math.max(...aqi.outdoor, ...aqi.none, ...aqi.plan)
+    return EDGES.find((e) => e >= Math.max(100, peak * 1.05)) ?? 500
+  }, [aqi])
+
   const n = times.length
   const innerW = width - M.left - M.right
   const innerH = HEIGHT - M.top - M.bottom
-  const { max, step } = useMemo(() => niceMax(Math.max(...outdoor, ...none, ...plan)), [outdoor, none, plan])
   const x = (i: number) => M.left + (n <= 1 ? 0 : (i / (n - 1)) * innerW)
-  const y = (v: number) => M.top + innerH - (v / max) * innerH
+  const y = (v: number) => M.top + innerH - (Math.min(v, top) / top) * innerH
 
-  const yTicks: number[] = []
-  for (let v = 0; v <= max + 1e-9; v += step) yTicks.push(v)
+  const bands = AQI_CATEGORIES.filter((c) => c.aqiLow < top).map((c) => {
+    const low = c.aqiLow === 0 ? 0 : c.aqiLow - 1
+    const high = Math.min(c.aqiHigh, top)
+    return { ...c, y1: y(high), y2: y(low) }
+  })
+  const ticks = [0, ...EDGES.filter((e) => e <= top)]
 
   const dayTicks = times.flatMap((t, i) => (parseLocal(t).getHours() === 0 ? [i] : []))
   // Thin out day labels on narrow screens so they don't collide.
   const labelEvery = Math.ceil((dayTicks.length * 70) / innerW) || 1
-
-  // Category boundaries that fall inside the visible range.
-  const thresholds = AQI_CATEGORIES.slice(1)
-    .map((c, i) => ({ value: AQI_CATEGORIES[i].pmHigh, label: c.label }))
-    .filter((t) => t.value < max)
 
   function indexFromPointer(e: PointerEvent<SVGRectElement>) {
     const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect()
@@ -88,7 +91,8 @@ export function ExposureChart({ times, outdoor, none, plan }: Props) {
     }
   }
 
-  const values = { outdoor, none, plan }
+  const pm = { outdoor, none, plan }
+  const describe = (s: keyof typeof pm, i: number) => `${aqiLabel(pm[s][i])} ${categoryForPm(pm[s][i]).label}`
   const tipLeft = active === null ? 0 : x(active)
   const tipOnLeft = tipLeft > width / 2
 
@@ -115,27 +119,26 @@ export function ExposureChart({ times, outdoor, none, plan }: Props) {
           width={width}
           height={HEIGHT}
           role="img"
-          aria-label={`Hourly PM2.5 over ${n} hours. Outdoor peak ${fmtPm(Math.max(...outdoor))}, room with no cleaner peak ${fmtPm(Math.max(...none))}, room with your cleaners peak ${fmtPm(Math.max(...plan))} micrograms per cubic meter. Use arrow keys to read hourly values.`}
+          aria-label={`Air quality over ${n} hours. Worst outside: ${describe('outdoor', aqi.outdoor.indexOf(Math.max(...aqi.outdoor)))}. Worst in your room with windows closed: ${describe('none', aqi.none.indexOf(Math.max(...aqi.none)))}. Worst in your room with your air cleaners: ${describe('plan', aqi.plan.indexOf(Math.max(...aqi.plan)))}. Use arrow keys to read each hour.`}
           tabIndex={0}
           onKeyDown={onKey}
           onFocus={() => setActive((a) => a ?? 0)}
           onBlur={() => setActive(null)}
         >
-          {yTicks.map((v) => (
-            <g key={v}>
-              <line x1={M.left} x2={width - M.right} y1={y(v)} y2={y(v)} className="grid" />
-              <text x={M.left - 6} y={y(v)} dy="0.32em" textAnchor="end" className="tick">
-                {v}
-              </text>
+          {bands.map((b) => (
+            <g key={b.id}>
+              <rect x={M.left} y={b.y1} width={innerW} height={Math.max(0, b.y2 - b.y1)} className={`band band-${b.id}`} />
+              {b.y2 - b.y1 >= 16 && (
+                <text x={M.left + 6} y={b.y1 + 13} className="band-label">
+                  {b.label}
+                </text>
+              )}
             </g>
           ))}
-          {thresholds.map((t) => (
-            <g key={t.value}>
-              <line x1={M.left} x2={width - M.right} y1={y(t.value)} y2={y(t.value)} className="threshold" />
-              <text x={width - M.right - 4} y={y(t.value) - 4} textAnchor="end" className="threshold-label">
-                {t.label} above {Math.round(t.value)}
-              </text>
-            </g>
+          {ticks.map((v) => (
+            <text key={v} x={M.left - 6} y={y(v)} dy="0.32em" textAnchor="end" className="tick">
+              {v}
+            </text>
           ))}
           {dayTicks.map((i, k) => (
             <g key={i}>
@@ -149,15 +152,15 @@ export function ExposureChart({ times, outdoor, none, plan }: Props) {
           ))}
           <line x1={M.left} x2={width - M.right} y1={M.top + innerH} y2={M.top + innerH} className="axis" />
 
-          <path d={pathFor(outdoor, x, y)} className="line-outdoor" />
-          <path d={pathFor(none, x, y)} className="line-none" />
-          <path d={pathFor(plan, x, y)} className="line-plan" />
+          <path d={pathFor(aqi.outdoor, x, y)} className="line-outdoor" />
+          <path d={pathFor(aqi.none, x, y)} className="line-none" />
+          <path d={pathFor(aqi.plan, x, y)} className="line-plan" />
 
           {active !== null && (
             <g>
               <line x1={x(active)} x2={x(active)} y1={M.top} y2={M.top + innerH} className="crosshair" />
               {SERIES.map((s) => (
-                <circle key={s.key} cx={x(active)} cy={y(values[s.key][active])} r={4.5} className={`dot ${s.cls}`} />
+                <circle key={s.key} cx={x(active)} cy={y(aqi[s.key][active])} r={4.5} className={`dot ${s.cls}`} />
               ))}
             </g>
           )}
@@ -186,7 +189,7 @@ export function ExposureChart({ times, outdoor, none, plan }: Props) {
                 <svg width="14" height="8">
                   <line x1="1" y1="4" x2="13" y2="4" className={s.cls} />
                 </svg>
-                <strong>{fmtPm(values[s.key][active])}</strong>
+                <strong>{aqiLabel(pm[s.key][active])}</strong>
                 <span>{s.label}</span>
               </div>
             ))}
@@ -195,10 +198,10 @@ export function ExposureChart({ times, outdoor, none, plan }: Props) {
       </div>
       <p className="visually-hidden" aria-live="polite">
         {active !== null &&
-          `${fmtDayHour(times[active])}: outdoors ${fmtPm(outdoor[active])}, no cleaner ${fmtPm(none[active])}, your cleaners ${fmtPm(plan[active])}.`}
+          `${fmtDayHour(times[active])}: outside ${describe('outdoor', active)}, windows closed ${describe('none', active)}, with your air cleaners ${describe('plan', active)}.`}
       </p>
       <figcaption className="fine">
-        Hourly PM2.5 in µg/m³. Gray lines mark where each AQI category begins.
+        Air quality index (AQI) each hour. Point at the chart, or tab to it and use the arrow keys, to see each hour.
       </figcaption>
 
       {showTable && (
@@ -207,20 +210,18 @@ export function ExposureChart({ times, outdoor, none, plan }: Props) {
             <thead>
               <tr>
                 <th scope="col">Hour</th>
-                <th scope="col">Outdoors</th>
-                <th scope="col">No cleaner</th>
-                <th scope="col">Your cleaners</th>
-                <th scope="col">Room category</th>
+                <th scope="col">Outside</th>
+                <th scope="col">Windows closed</th>
+                <th scope="col">Your air cleaners</th>
               </tr>
             </thead>
             <tbody>
               {times.map((t, i) => (
                 <tr key={t}>
                   <th scope="row">{fmtDayHour(t)}</th>
-                  <td>{fmtPm(outdoor[i])}</td>
-                  <td>{fmtPm(none[i])}</td>
-                  <td>{fmtPm(plan[i])}</td>
-                  <td>{categoryForPm(plan[i]).label}</td>
+                  <td>{describe('outdoor', i)}</td>
+                  <td>{describe('none', i)}</td>
+                  <td>{describe('plan', i)}</td>
                 </tr>
               ))}
             </tbody>

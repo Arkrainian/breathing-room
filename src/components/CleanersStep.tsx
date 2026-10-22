@@ -16,33 +16,34 @@ export function CleanersStep({ devices, errors, onChange }: Props) {
   }
 
   function changeKind(row: DeviceRow, kind: DeviceKind) {
-    const preset = presetFor(kind)
-    patch(row.id, { kind, cadr: preset.cadrCfm == null ? '' : String(preset.cadrCfm) })
+    const fresh = newDeviceRow(kind)
+    patch(row.id, { kind, cadr: fresh.cadr, labelMode: fresh.labelMode, roomSize: fresh.roomSize })
   }
 
   return (
     <fieldset className="step">
       <legend>
         <span className="step-num" aria-hidden="true">3</span>
-        Air cleaners in the room
+        What will clean the air?
       </legend>
       <p className="step-help">
-        Add what you own or could build. Clean air delivery rate (CADR) is how many cubic feet of filtered air a unit
-        puts out each minute. Use the smoke or tobacco-smoke number.
+        Add any air purifiers you own, or homemade fan filters you could build. Not sure what to pick? Start with what
+        you have. The results will tell you if it is enough.
       </p>
 
       {devices.length === 0 && (
-        <p className="empty-note">No air cleaners yet. The results show what a closed-up room gets on its own.</p>
+        <p className="empty-note">Nothing added yet. The results will show what happens with only the windows closed.</p>
       )}
 
       <ol className="device-list">
         {devices.map((row, i) => {
           const preset = presetFor(row.kind)
+          const isPurifier = row.kind === 'purifier'
           return (
             <li key={row.id} className="device">
               <div className="field device-kind">
                 <label htmlFor={`${row.id}-kind`} className="field-label">
-                  Unit {i + 1}
+                  Air cleaner {i + 1}
                 </label>
                 <select id={`${row.id}-kind`} value={row.kind} onChange={(e) => changeKind(row, e.target.value as DeviceKind)}>
                   {DEVICE_PRESETS.map((p) => (
@@ -53,29 +54,76 @@ export function CleanersStep({ devices, errors, onChange }: Props) {
                 </select>
                 <p className="fine">{preset.detail}</p>
               </div>
-              <NumberField
-                id={`${row.id}-cadr`}
-                label="CADR each"
-                unit="cfm"
-                value={row.cadr}
-                error={errors[`${row.id}-cadr`]}
-                onChange={(v) => patch(row.id, { cadr: v })}
-              />
-              <NumberField
-                id={`${row.id}-count`}
-                label="How many"
-                value={row.count}
-                error={errors[`${row.id}-count`]}
-                onChange={(v) => patch(row.id, { count: v })}
-              />
-              <button
-                type="button"
-                className="btn-remove"
-                onClick={() => onChange(devices.filter((d) => d.id !== row.id))}
-                aria-label={`Remove unit ${i + 1}, ${preset.name}`}
-              >
-                Remove
-              </button>
+
+              {isPurifier && (
+                <div className="device-label">
+                  <p className="field-label" id={`${row.id}-mode-label`}>
+                    What does the box or label say?
+                  </p>
+                  <div className="segmented segmented-small" role="radiogroup" aria-labelledby={`${row.id}-mode-label`}>
+                    <label className={row.labelMode !== 'cadr' ? 'is-on' : ''}>
+                      <input
+                        type="radio"
+                        name={`${row.id}-mode`}
+                        checked={row.labelMode !== 'cadr'}
+                        onChange={() => patch(row.id, { labelMode: 'area' })}
+                      />
+                      Room size it’s made for
+                    </label>
+                    <label className={row.labelMode === 'cadr' ? 'is-on' : ''}>
+                      <input
+                        type="radio"
+                        name={`${row.id}-mode`}
+                        checked={row.labelMode === 'cadr'}
+                        onChange={() => patch(row.id, { labelMode: 'cadr' })}
+                      />
+                      Smoke CADR number
+                    </label>
+                  </div>
+                  {row.labelMode === 'cadr' ? (
+                    <NumberField
+                      id={`${row.id}-cadr`}
+                      label="Smoke CADR"
+                      unit="cfm"
+                      value={row.cadr}
+                      error={errors[`${row.id}-cadr`]}
+                      onChange={(v) => patch(row.id, { cadr: v })}
+                    />
+                  ) : (
+                    <NumberField
+                      id={`${row.id}-area`}
+                      label="Room size on the label"
+                      unit="sq ft"
+                      value={row.roomSize ?? ''}
+                      error={errors[`${row.id}-area`]}
+                      onChange={(v) => patch(row.id, { roomSize: v })}
+                    />
+                  )}
+                  <p className="fine">
+                    {row.labelMode === 'cadr'
+                      ? 'Use the smoke number if the label lists smoke, dust, and pollen separately.'
+                      : 'Most boxes say something like “for rooms up to 300 sq ft.”'}
+                  </p>
+                </div>
+              )}
+
+              <div className="device-foot">
+                <NumberField
+                  id={`${row.id}-count`}
+                  label="How many"
+                  value={row.count}
+                  error={errors[`${row.id}-count`]}
+                  onChange={(v) => patch(row.id, { count: v })}
+                />
+                <button
+                  type="button"
+                  className="btn-remove"
+                  onClick={() => onChange(devices.filter((d) => d.id !== row.id))}
+                  aria-label={`Remove air cleaner ${i + 1}, ${preset.name}`}
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           )
         })}
@@ -87,9 +135,9 @@ export function CleanersStep({ devices, errors, onChange }: Props) {
         onClick={() => onChange([...devices, newDeviceRow('purifier')])}
         disabled={devices.length >= MAX_ROWS}
       >
-        Add an air cleaner
+        Add another air cleaner
       </button>
-      {devices.length >= MAX_ROWS && <p className="fine">That is the limit of {MAX_ROWS} rows. Use “How many” for duplicates.</p>}
+      {devices.length >= MAX_ROWS && <p className="fine">That’s the limit of {MAX_ROWS}. Use “How many” for more of the same kind.</p>}
     </fieldset>
   )
 }

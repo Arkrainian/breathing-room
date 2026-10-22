@@ -42,15 +42,15 @@ async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
     res = await fetch(url, { signal })
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err
-    throw new ApiError('Could not reach the air quality service. Check your connection and try again.')
+    throw new ApiError('We couldn’t reach the forecast service. Check your internet connection and try again.')
   }
   if (!res.ok) {
-    throw new ApiError(`The air quality service returned an error (HTTP ${res.status}). Try again in a minute.`)
+    throw new ApiError(`We couldn’t get the smoke forecast right now (error ${res.status}). Try again in a minute.`)
   }
   try {
     return await res.json()
   } catch {
-    throw new ApiError('The air quality service sent a response this app could not read.')
+    throw new ApiError('The forecast service sent something we couldn’t read. Try again in a minute.')
   }
 }
 
@@ -101,7 +101,7 @@ export function parseAirQuality(json: unknown, startTime?: string) {
   const times = hourly?.time
   const pm = hourly?.pm2_5
   if (!Array.isArray(times) || !Array.isArray(pm) || times.some((t) => typeof t !== 'string')) {
-    throw new InsufficientDataError('The forecast did not include PM2.5 for this location.')
+    throw new InsufficientDataError('There’s no smoke forecast for this place. Try a nearby larger town.')
   }
   let start = 0
   if (startTime) {
@@ -127,7 +127,7 @@ export async function fetchForecast(place: Place, signal?: AbortSignal): Promise
   return {
     kind: 'forecast',
     ...series,
-    title: `${placeLabel(place)}: next ${Math.round(series.values.length / 24)} days`,
+    title: `${placeLabel(place)}, next ${Math.round(series.values.length / 24)} days`,
     note: 'CAMS global forecast via Open-Meteo, about 45 km grid. Local smoke can run well above the grid average.',
   }
 }
@@ -160,7 +160,7 @@ export async function fetchReplay(signal?: AbortSignal): Promise<OutdoorSeries> 
   return {
     kind: 'replay',
     ...series,
-    title: 'New York City, June 5–9, 2023 (Canadian wildfire smoke)',
+    title: 'Example: New York City during the June 2023 smoke',
     note: 'Archived CAMS model values. Ground monitors in Rockland and Westchester counties averaged 122 µg/m³ on June 7 (CDC), well above what this coarse model shows.',
   }
 }
@@ -181,7 +181,7 @@ export function manualSeries(pm: number, now: Date = new Date()): OutdoorSeries 
     kind: 'manual',
     times,
     values: times.map(() => pm),
-    title: `Your reading held steady for ${MANUAL_HOURS} hours`,
+    title: `Your air quality number, held for two days`,
     note: `Outdoor PM2.5 fixed at ${pm} µg/m³. Real smoke rises and falls, so treat this as a sustained worst case.`,
     filledHours: 0,
   }
