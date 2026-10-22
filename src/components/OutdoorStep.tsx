@@ -65,7 +65,7 @@ export function OutdoorStep({ source, onChange }: Props) {
   )
 }
 
-function ForecastPicker({ source, onChange }: Props) {
+export function ForecastPicker({ source, onChange }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Place[] | null>(null)
   const [busy, setBusy] = useState(false)

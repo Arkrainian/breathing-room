@@ -20,20 +20,21 @@ EPA's advice is to create a "clean room" with a portable air cleaner sized for t
 
 ## What it does
 
-1. **Outdoor air.** Pick one of three sources:
-   - the 5-day hourly PM2.5 forecast for any town (CAMS via Open-Meteo),
-   - a reading you already have (PM2.5 or AQI from AirNow, PurpleAir, or your own sensor), held steady for 48 hours as a worst case,
-   - a replay of the June 5–9, 2023 New York smoke, so the tool can be demonstrated when the air outside is clean.
-2. **The room.** Pick a size (small, medium, or large bedroom, or living room) or enter exact dimensions, then say how drafty the home feels.
-3. **Air cleaners.** Any mix of store-bought purifiers and five homemade fan-filter designs. For a purifier, people can type the room size printed on the box ("for rooms up to 300 sq ft"), which the app converts with EPA's sizing ratio, or the smoke CADR if they know it.
-4. **Results**, written for someone with no background in air quality:
-   - A one-line answer ("Your room will stay healthy to breathe" / "Your room needs more air cleaning") and a sentence explaining it.
-   - The worst-hour air quality index (the 0–500 number weather apps show) outside, in the room with windows closed, and in the room with the air cleaners, each with its category name.
-   - "What to do": how many homemade filter cubes, or what size of purifier, would keep the room in the Good range, plus the key steps from EPA's guidance.
-   - An hour-by-hour chart on the AQI scale with labeled Good / Moderate / Unhealthy bands, readable by mouse, touch, or keyboard, with a table view.
-   - A closed "More details" section with PM2.5 values, hours per category, EPA sizing check, and the equation with the room's numbers plugged in.
-5. **Checklist.** EPA's clean room steps, split into before, during, and after smoke. Ticks are saved in the browser.
-6. **Share and print.** The whole plan lives in the URL, so it can be bookmarked or texted to a relative. A print stylesheet produces a paper copy.
+The site asks three questions, one per screen, with large buttons:
+
+1. **Where do you live?** A town search (or "use my location") pulls the hourly smoke forecast. People who'd rather not share a location can use an example from the June 2023 New York smoke.
+2. **Which room will you stay in?** Small bedroom, medium bedroom, large bedroom, or living room. No measuring.
+3. **What do you have to clean the air?** An air purifier (then: "What size room is it made for?", which is printed on the box), a box fan with a furnace filter, or nothing yet.
+
+The answer screen then shows:
+
+- **A yes / mostly / no answer** in one sentence: "Your room will stay safe to breathe," "Your room will be OK for most people," or "Your room will get too smoky."
+- **Two tiles:** the air outside at the worst time and the air in the room, each as a category name (Good, Moderate, Unhealthy…) and the 0–500 air quality number from weather apps.
+- **How to fix it**, when needed: how many homemade filter cubes, or what size of purifier, would keep the room Good. One tap adds the fix and re-checks.
+- **A heavy-smoke test** when the current forecast is light or clean, so a "yes" on a clear day isn't mistaken for "ready."
+- **Three steps for when smoke comes**, and a link to the full EPA-based checklist.
+- **Optional:** an hour-by-hour chart with labeled Good / Moderate / Unhealthy bands (mouse, touch, or keyboard, plus a table view), and a closed "More details and settings" section. That section has the full editor (several air cleaners, exact room size, how drafty the home is, a measured air exchange rate), the PM2.5 values, hours per category, the EPA sizing check, and the equation with the room's numbers plugged in.
+- **Share and print.** The whole plan lives in the URL, so a shared link opens straight to the answer.
 
 ## How the model works
 
@@ -93,11 +94,14 @@ src/
     form.ts            input validation and the shareable URL format
     storage.ts         localStorage wrapper that never throws
     format.ts          number and date formatting
+    describe.ts        plain-language summary of the person's answers
   components/          React UI
-    OutdoorStep.tsx    step 1: forecast search, manual reading, replay
-    RoomStep.tsx       step 2
-    CleanersStep.tsx   step 3
-    Results.tsx        verdict, peaks, tables, math
+    Wizard.tsx         the three questions, one per screen
+    Answer.tsx         yes/no answer, tiles, one-tap fixes
+    Details.tsx        "More details": numbers, tables, the math
+    OutdoorStep.tsx    full editors used inside More details
+    RoomStep.tsx
+    CleanersStep.tsx
     ExposureChart.tsx  hand-written SVG chart with keyboard support
     Checklist.tsx, Methodology.tsx, NumberField.tsx
   App.tsx              state, data loading, layout
@@ -146,8 +150,8 @@ If you fork or rename the repository, change `base` in `vite.config.ts` to `/<ne
 
 Status as of October 22, 2026:
 
-- **Unit tests (Vitest): 60 passing.** They check the model against its closed-form solutions, the AQI breakpoints at every boundary, gap filling, input validation, share-link round trips, and that the recommended CADR keeps the simulated room under the target.
-- **Browser tests (Playwright): 15 tests × 2 viewports (desktop Chrome, Pixel 7) = 30 passing.** They cover the empty state, the example, place search, no-result search, a service outage with retry, invalid inputs, manual AQI entry, shared links, room-size presets, entering a purifier by its label's room size, adding and removing cleaners, keyboard chart reading, checklist persistence, horizontal overflow (including a 320 px screen), and an axe-core WCAG 2.1 AA scan. Network calls are stubbed with fixed data so results don't depend on the weather.
+- **Unit tests (Vitest): 62 passing.** They check the model against its closed-form solutions, the AQI breakpoints at every boundary, gap filling, input validation, share-link round trips, and that the recommended CADR keeps the simulated room under the target.
+- **Browser tests (Playwright): 18 tests × 2 viewports (desktop Chrome, Pixel 7) = 36 passing.** They walk through the three questions, Back, the example, the purifier-size question and its input checks, a search with no match, a service outage with retry, the one-tap fixes (filter cube and purifier), the heavy-smoke test for light and clean air, shared links, editing and validation in More details, keyboard chart reading, Start over, checklist persistence, horizontal overflow (including a 320 px screen), and an axe-core WCAG 2.1 AA scan of the question and answer screens. Network calls are stubbed with fixed data so results don't depend on the weather.
 - **Manual checks:** screenshots of desktop light, desktop dark, and mobile layouts against the live Open-Meteo API, with no console errors.
 
 Not tested: Safari and Firefox (only Chromium was automated), real screen readers (axe catches many but not all problems), and printing on paper.

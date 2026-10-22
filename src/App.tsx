@@ -1,6 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, fetchForecast, fetchReplay, manualSeries, type OutdoorSeries } from './lib/api'
-import { decodeShare, defaultForm, encodeShare, type FormState, type SourceRef, validateForm } from './lib/form'
+import { aqiToPm, pmToAqi } from './lib/aqi'
+import { roomLabel, setupLabel } from './lib/describe'
+import {
+  decodeShare,
+  defaultForm,
+  encodeShare,
+  type FormState,
+  newDeviceRow,
+  type SourceRef,
+  validateForm,
+} from './lib/form'
 import { computePlan, type PlanResult } from './lib/plan'
 import { InsufficientDataError } from './lib/series'
 import { loadJson, saveJson } from './lib/storage'
@@ -8,24 +18,28 @@ import type { RoomParams } from './lib/model'
 import { OutdoorStep } from './components/OutdoorStep'
 import { RoomStep } from './components/RoomStep'
 import { CleanersStep } from './components/CleanersStep'
-import { Results } from './components/Results'
+import { Answer } from './components/Answer'
+import { Details } from './components/Details'
+import { type Screen, Wizard } from './components/Wizard'
 import { Checklist } from './components/Checklist'
 import { Methodology, Sources } from './components/Methodology'
 
 export const REPO_URL = 'https://github.com/Arkrainian/breathing-room'
 const PLAN_KEY = 'breathing-room:plan'
+/** "Test with heavy smoke" uses this air quality number: well into Very Unhealthy. */
+const HEAVY_SMOKE_AQI = 250
 
 interface Saved {
   form: FormState
   source: SourceRef | null
 }
 
-function initialState(): Saved {
+function initialState(): Saved & { screen: Screen } {
   const fromUrl = decodeShare(window.location.search)
-  if (fromUrl) return fromUrl
+  if (fromUrl) return { ...fromUrl, screen: fromUrl.source ? 'answer' : 'start' }
   const saved = loadJson<Saved | null>(PLAN_KEY, null)
-  if (saved?.form?.devices) return saved
-  return { form: defaultForm(), source: null }
+  if (saved?.form?.devices) return { ...saved, screen: saved.source ? 'answer' : 'start' }
+  return { form: defaultForm(), source: null, screen: 'start' }
 }
 
 async function loadSource(source: SourceRef, signal: AbortSignal): Promise<OutdoorSeries> {
@@ -34,10 +48,23 @@ async function loadSource(source: SourceRef, signal: AbortSignal): Promise<Outdo
   return manualSeries(source.pm)
 }
 
+function sourceLabel(source: SourceRef): string {
+  if (source.kind === 'forecast') return [source.place.name, source.place.region].filter(Boolean).join(', ')
+  if (source.kind === 'replay') return 'Example: New York City, June 2023 smoke'
+  return `Air quality ${pmToAqi(source.pm)} outside`
+}
+
+function placeName(source: SourceRef | null): string {
+  if (source?.kind === 'forecast') return source.place.name
+  if (source?.kind === 'replay') return 'New York City'
+  return 'you'
+}
+
 export default function App() {
   const [initial] = useState(initialState)
   const [form, setForm] = useState<FormState>(initial.form)
   const [source, setSource] = useState<SourceRef | null>(initial.source)
+  const [screen, setScreen] = useState<Screen>(initial.screen)
   const [reloadKey, setReloadKey] = useState(0)
   const [shareStatus, setShareStatus] = useState('')
 
@@ -77,9 +104,20 @@ export default function App() {
     window.history.replaceState(null, '', `${window.location.pathname}?${query}${window.location.hash}`)
   }, [form, source])
 
+  // Each new screen starts at the top, with focus on its heading for screen reader users.
+  const firstScreen = useRef(true)
+  useEffect(() => {
+    if (firstScreen.current) {
+      firstScreen.current = false
+      return
+    }
+    window.scrollTo({ top: 0 })
+    document.getElementById(screen === 'answer' ? 'answer-heading' : 'screen-title')?.focus()
+  }, [screen])
+
   const validated = useMemo(() => validateForm(form), [form])
 
-  // Hold on to the last good result so the chart doesn't vanish while someone retypes a number.
+  // Hold on to the last good result so the answer doesn't vanish while someone retypes a number.
   const current = useMemo(() => {
     if (!outdoor || !validated.room || !validated.devices) return null
     return { result: computePlan(outdoor.values, validated.room, validated.devices), room: validated.room }
@@ -91,6 +129,20 @@ export default function App() {
 
   const update = useCallback((patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch })), [])
 
+  function showExample() {
+    setForm(defaultForm())
+    setSource({ kind: 'replay' })
+    setScreen('answer')
+  }
+
+  function startOver() {
+    setForm(defaultForm())
+    setSource(null)
+    setOutdoor(null)
+    setShareStatus('')
+    setScreen('start')
+  }
+
   async function share() {
     const url = window.location.href
     try {
@@ -101,22 +153,29 @@ export default function App() {
     }
   }
 
+  const editors = (
+    <>
+      <OutdoorStep source={source} onChange={setSource} />
+      <RoomStep form={form} errors={validated.errors} update={update} />
+      <CleanersStep devices={form.devices} errors={validated.errors} onChange={(devices) => update({ devices })} />
+    </>
+  )
+
   return (
     <>
-      <a className="skip-link" href="#plan">
-        Skip to the planner
+      <a className="skip-link" href="#main">
+        Skip to main content
       </a>
       <header className="masthead">
         <div className="wrap masthead-inner">
-          <a href="#top" className="wordmark" aria-label="Breathing Room, home">
+          <button type="button" className="wordmark" onClick={startOver} aria-label="Breathing Room, start over">
             <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
               <rect x="1.5" y="1.5" width="19" height="19" rx="2" className="mark-room" />
               <path d="M5 8c2-2 4 2 6 0s4 2 6 0M5 14c2-2 4 2 6 0s4 2 6 0" className="mark-air" />
             </svg>
             Breathing Room
-          </a>
+          </button>
           <nav aria-label="Sections">
-            <a href="#plan">Make a plan</a>
             <a href="#checklist">Checklist</a>
             <a href="#method">How it works</a>
             <a href="#sources">Sources</a>
@@ -124,28 +183,96 @@ export default function App() {
         </div>
       </header>
 
-      <main id="top">
-        <section className="intro wrap">
-          <h1>Make one room in your home safe to breathe during wildfire smoke.</h1>
-          <p className="lede">
-            Smoke gets inside even with the windows closed. Tell us where you live, which room you’ll use, and what
-            fans or air purifiers you have. We’ll show how smoky that room will get over the next few days, and what
-            to add if it isn’t enough.
-          </p>
-          <ol className="how-steps" aria-label="How it works">
-            <li>
-              <strong>Where you live</strong>
-              <span>We look up the smoke forecast.</span>
-            </li>
-            <li>
-              <strong>Your room</strong>
-              <span>Pick a size. No measuring needed.</span>
-            </li>
-            <li>
-              <strong>Your air cleaners</strong>
-              <span>A purifier, or a box fan with a filter.</span>
-            </li>
-          </ol>
+      <main id="main">
+        <div className="stage">
+          {screen !== 'answer' ? (
+            <Wizard
+              screen={screen}
+              source={source}
+              go={setScreen}
+              update={update}
+              setSource={setSource}
+              showExample={showExample}
+            />
+          ) : (
+            <section className="screen" aria-labelledby="answer-heading">
+              <h1 id="answer-heading" className="visually-hidden" tabIndex={-1}>
+                Your answer
+              </h1>
+              {source && (
+                <div className="your-answers">
+                  <p>
+                    {roomLabel(form)} · {setupLabel(form)} · {sourceLabel(source)}
+                  </p>
+                  <div className="your-answers-actions">
+                    <button type="button" className="btn-link" onClick={() => setScreen('place')}>
+                      Change my answers
+                    </button>
+                    <button type="button" className="btn-link" onClick={startOver}>
+                      Start over
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {hasErrors && shown && (
+                <p className="notice" role="alert">
+                  Something in “More details” needs fixing (marked in red). The answer below is from before that change.
+                </p>
+              )}
+              {error && (
+                <div className="notice notice-error" role="alert">
+                  <p>{error}</p>
+                  <div className="inline-row">
+                    <button type="button" className="btn btn-secondary" onClick={() => setReloadKey((k) => k + 1)}>
+                      Try again
+                    </button>
+                    <button type="button" className="btn-link" onClick={showExample}>
+                      Use an example instead
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!shown && loading && (
+                <p className="loading" role="status">
+                  Checking the smoke forecast…
+                </p>
+              )}
+              {shown && outdoor && (
+                <Answer
+                  outdoor={outdoor}
+                  result={shown.result}
+                  placeName={placeName(source)}
+                  stale={loading || hasErrors}
+                  onAddCubes={(n) => update({ devices: [...form.devices, newDeviceRow('cr-box-4', undefined, n)] })}
+                  onAddPurifier={(sq) =>
+                    update({ devices: [...form.devices, { ...newDeviceRow('purifier'), roomSize: String(sq) }] })
+                  }
+                  onTestHeavySmoke={() => setSource({ kind: 'manual', pm: aqiToPm(HEAVY_SMOKE_AQI) })}
+                  details={<Details outdoor={outdoor} room={shown.room} result={shown.result} editors={editors} />}
+                />
+              )}
+              {shown && (
+                <div className="answer-actions no-print">
+                  <button type="button" className="btn btn-secondary" onClick={share}>
+                    Share this plan
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
+                    Print
+                  </button>
+                  <span className="share-status" role="status">
+                    {shareStatus}
+                  </span>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+
+        <section id="why" className="section" aria-labelledby="why-title">
+          <div className="section-head">
+            <h2 id="why-title">Why this matters</h2>
+          </div>
           <div className="evidence">
             <p>
               Wildfire smoke is linked to an estimated <strong>41,000 deaths a year</strong> in the United States
@@ -159,58 +286,6 @@ export default function App() {
               filter taped to a box fan, can clean the air in one room if it is big enough for that room.
             </p>
           </div>
-        </section>
-
-        <section id="plan" className="planner wrap" aria-label="Clean room planner">
-          <div className="inputs">
-            <OutdoorStep source={source} onChange={setSource} />
-            <RoomStep form={form} errors={validated.errors} update={update} />
-            <CleanersStep devices={form.devices} errors={validated.errors} onChange={(devices) => update({ devices })} />
-          </div>
-
-          <aside className="results-col" aria-live="polite" aria-labelledby="results-title">
-            {hasErrors && shown && (
-              <p className="notice" role="alert">
-                Something in the form needs fixing (marked in red). The results below are from before that change.
-              </p>
-            )}
-            {error && (
-              <div className="notice notice-error" role="alert">
-                <p>{error}</p>
-                <button type="button" className="btn btn-secondary" onClick={() => setReloadKey((k) => k + 1)}>
-                  Try again
-                </button>
-              </div>
-            )}
-            {!shown && loading && (
-              <p className="results-empty" role="status">
-                Looking up the smoke forecast…
-              </p>
-            )}
-            {!shown && !loading && !error && (
-              <div className="results-empty">
-                <h2 id="results-title">Your answer will show up here</h2>
-                <p>
-                  Start with step 1: search for your town. You’ll find out whether your room will stay healthy to
-                  breathe, and what to add if it won’t.
-                </p>
-                <p>Want to see how it works first? Try it with real smoke from June 2023 in New York City.</p>
-                <button type="button" className="btn" onClick={() => setSource({ kind: 'replay' })}>
-                  Show me an example
-                </button>
-              </div>
-            )}
-            {shown && outdoor && (
-              <Results
-                outdoor={outdoor}
-                room={shown.room}
-                result={shown.result}
-                stale={loading || hasErrors}
-                onShare={share}
-                shareStatus={shareStatus}
-              />
-            )}
-          </aside>
         </section>
 
         <Checklist />

@@ -44,167 +44,185 @@ test.afterEach(async ({ page }) => {
   expect((page as Page & { _errors?: string[] })._errors ?? []).toEqual([])
 })
 
-test('landing page explains the tool and shows an empty results state', async ({ page }) => {
+const answerUrl = (src: string, dev = 'box-fan-1.111.1', room = '12x12x8') =>
+  `./?room=${room}&leak=average${dev ? `&dev=${dev}` : ''}&src=${src}`
+
+test('start screen asks one clear question', async ({ page }) => {
   await mockApis(page)
   await page.goto('./')
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('safe to breathe')
-  await expect(page.getByRole('heading', { name: 'Your answer will show up here' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Skip to the planner' })).toBeAttached()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Will your room keep wildfire smoke out?')
+  await expect(page.getByRole('button', { name: 'Check my room' })).toBeVisible()
 })
 
-test('replay a past smoke event and see indoor estimates', async ({ page }) => {
+test('three questions lead to a yes-or-no answer', async ({ page }) => {
   await mockApis(page)
   await page.goto('./')
-  await page.getByRole('button', { name: 'Show me an example' }).click()
-  await expect(page.getByText(/Example: New York City during the June 2023 smoke/)).toBeVisible()
-  await expect(page.locator('.summary h2')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'At the smokiest time' })).toBeVisible()
-  await expect(page.locator('.chart-wrap svg')).toBeVisible()
-  await expect(page.locator('.hours-table tbody tr')).toHaveCount(6)
-
-  const peak = page.locator('.compare-plan .aqi-num')
-  const before = Number(await peak.textContent())
-  await page.getByLabel('How many').first().fill('3')
-  await expect.poll(async () => Number(await peak.textContent())).toBeLessThan(before)
-})
-
-test('search for a town and load its forecast', async ({ page }) => {
-  await mockApis(page)
-  await page.goto('./')
+  await page.getByRole('button', { name: 'Check my room' }).click()
+  await expect(page.getByText('Question 1 of 3')).toBeVisible()
   await page.getByLabel('City or town').fill('Bend')
   await page.getByRole('button', { name: 'Search' }).click()
   await page.getByRole('button', { name: /Bend\s*Oregon/ }).click()
-  await expect(page.getByText(/Bend, Oregon, United States, next/)).toBeVisible()
-  await expect(page.getByText('Using the smoke forecast for')).toBeVisible()
+  await expect(page.getByText('Question 2 of 3')).toBeVisible()
+  await page.getByRole('button', { name: /Medium bedroom/ }).click()
+  await expect(page.getByText('Question 3 of 3')).toBeVisible()
+  await page.getByRole('button', { name: /A box fan with a furnace filter/ }).click()
+  await expect(page.locator('.verdict-card h2')).toBeVisible()
+  await expect(page.locator('.your-answers')).toContainText('Medium bedroom · a box fan with a filter · Bend, Oregon')
+  await expect(page.locator('.tile')).toHaveCount(2)
 })
 
-test('shows a helpful message when a search finds nothing', async ({ page }) => {
+test('Back goes to the previous question', async ({ page }) => {
   await mockApis(page)
   await page.goto('./')
+  await page.getByRole('button', { name: 'Check my room' }).click()
+  await page.getByRole('button', { name: '← Back' }).click()
+  await expect(page.getByRole('button', { name: 'Check my room' })).toBeVisible()
+})
+
+test('see an example without sharing a location', async ({ page }) => {
+  await mockApis(page)
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Or see an example first' }).click()
+  await expect(page.locator('.your-answers')).toContainText('Example: New York City')
+  await expect(page.locator('.verdict-card h2')).toBeVisible()
+})
+
+test('purifier size question, with a check on typed numbers', async ({ page }) => {
+  await mockApis(page)
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Check my room' }).click()
+  await page.getByLabel('City or town').fill('Bend')
+  await page.getByRole('button', { name: 'Search' }).click()
+  await page.getByRole('button', { name: /Bend\s*Oregon/ }).click()
+  await page.getByRole('button', { name: /Small bedroom/ }).click()
+  await page.getByRole('button', { name: /An air purifier/ }).click()
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.getByRole('alert')).toContainText('Type the number from the box')
+  await page.getByLabel('A different number').fill('20')
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.getByRole('alert')).toContainText('between 50 and 3,000')
+  await page.getByRole('button', { name: /Up to 300 sq ft/ }).click()
+  await expect(page.locator('.your-answers')).toContainText('Small bedroom · an air purifier')
+})
+
+test('search with no match explains what to try', async ({ page }) => {
+  await mockApis(page)
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Check my room' }).click()
   await page.getByLabel('City or town').fill('Zzyzxq')
   await page.getByRole('button', { name: 'Search' }).click()
   await expect(page.getByRole('alert')).toContainText('couldn’t find')
 })
 
-test('reports a service outage and offers a retry', async ({ page }) => {
+test('a service outage shows a retry and an example option', async ({ page }) => {
   await mockApis(page, { airStatus: 503 })
   await page.goto('./')
-  await page.getByRole('button', { name: 'Show me an example' }).click()
+  await page.getByRole('button', { name: 'Or see an example first' }).click()
   await expect(page.getByRole('alert')).toContainText('error 503')
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
 })
 
-test('validates room inputs and keeps the last good result', async ({ page }) => {
+test('one tap adds the fix and the answer turns to yes', async ({ page }) => {
   await mockApis(page)
-  await page.goto('./')
-  await page.getByRole('button', { name: 'Show me an example' }).click()
-  await expect(page.locator('.chart-wrap svg')).toBeVisible()
+  await page.goto(answerUrl('m:175', ''))
+  await expect(page.locator('.verdict-card h2')).toHaveText('Your room will get too smoky.')
+  await page.getByRole('button', { name: /Add (it|them) and check again/ }).first().click()
+  await expect(page.locator('.verdict-card h2')).toHaveText('Your room will stay safe to breathe.')
+  await expect(page.locator('.your-answers')).toContainText('filter cube')
+})
 
+test('a purifier suggestion is enough when added', async ({ page }) => {
+  await mockApis(page)
+  await page.goto(answerUrl('m:175', ''))
+  await page.getByRole('button', { name: 'Add it and check again' }).last().click()
+  await expect(page.locator('.verdict-card h2')).toHaveText('Your room will stay safe to breathe.')
+})
+
+test('light smoke offers a heavy-smoke test', async ({ page }) => {
+  await mockApis(page)
+  await page.goto(answerUrl('m:20'))
+  await page.getByRole('button', { name: 'Test my room with heavy smoke' }).click()
+  await expect(page.locator('.your-answers')).toContainText('Air quality 250 outside')
+})
+
+test('clean air says so and offers the same test', async ({ page }) => {
+  await mockApis(page)
+  await page.goto(answerUrl('m:5'))
+  await expect(page.locator('.verdict-card h2')).toContainText('No smoke is expected')
+  await expect(page.getByRole('button', { name: 'Test my room with heavy smoke' })).toBeVisible()
+})
+
+test('a shared link opens straight to the answer with its settings', async ({ page }) => {
+  await mockApis(page)
+  await page.goto('./?room=15x12x9&leak=leaky&dev=cr-box-4.401.2&src=m:120')
+  await expect(page.locator('.your-answers')).toContainText('15 × 12 ft room · 2 filter cubes')
+  await page.getByText('More details and settings').click()
+  await expect(page.getByLabel('Length')).toHaveValue('15')
+  await expect(page.getByRole('radio', { name: /Drafty/ })).toBeChecked()
+})
+
+test('settings in More details are checked and explained', async ({ page }) => {
+  await mockApis(page)
+  await page.goto(answerUrl('r'))
+  await expect(page.locator('.verdict-card')).toBeVisible()
+  await page.getByText('More details and settings').click()
   await page.getByText('I’ll enter the size').click()
   await page.getByLabel('Length').fill('')
   await expect(page.getByText('Enter the room length.')).toBeVisible()
-  await expect(page.getByText('Something in the form needs fixing')).toBeVisible()
-  await expect(page.getByLabel('Length')).toHaveAttribute('aria-invalid', 'true')
-  await expect(page.locator('.chart-wrap svg')).toBeVisible()
-
-  await page.getByLabel('Ceiling').fill('99')
-  await expect(page.getByText('Ceiling height should be between 6 and 30 ft.')).toBeVisible()
-})
-
-test('accepts a manual AQI reading and rejects nonsense', async ({ page }) => {
-  await mockApis(page)
-  await page.goto('./')
-  await page.getByText('I have an air quality number').click()
-  await page.getByLabel('Air quality number outside').fill('abc')
-  await page.getByRole('button', { name: 'Use this number' }).click()
-  await expect(page.getByRole('alert')).toContainText('Enter a number.')
-
-  await page.getByLabel('Reading unit').selectOption('aqi')
-  await page.getByLabel('Air quality number outside').fill('250')
-  await page.getByRole('button', { name: 'Use this number' }).click()
-  // AQI 250 is about 175 µg/m³, in the Very unhealthy band.
-  await expect(page.getByText('Your air quality number, held for two days')).toBeVisible()
-  await expect(page.locator('.compare-outside')).toContainText('250')
-  await expect(page.locator('.compare-outside')).toContainText('Very unhealthy')
-})
-
-test('a shared link restores the plan', async ({ page }) => {
-  await mockApis(page)
-  await page.goto('./?room=15x12x9&leak=leaky&dev=cr-box-4.401.2&src=m:120')
-  await expect(page.getByLabel('Length')).toHaveValue('15')
-  await expect(page.getByRole('radio', { name: /Drafty/ })).toBeChecked()
-  await expect(page.getByLabel('How many')).toHaveValue('2')
-  await expect(page.getByText('Your air quality number, held for two days')).toBeVisible()
-})
-
-test('add and remove air cleaners', async ({ page }) => {
-  await mockApis(page)
-  await page.goto('./')
+  await expect(page.getByText('needs fixing')).toBeVisible()
   await page.getByRole('button', { name: 'Add another air cleaner' }).click()
-  await expect(page.getByLabel('Air cleaner 2', { exact: true })).toHaveValue('purifier')
   await expect(page.getByText('Enter the room size from the label.')).toBeVisible()
-  await page.getByRole('button', { name: /Remove air cleaner 2/ }).click()
-  await expect(page.getByLabel('Air cleaner 2', { exact: true })).toHaveCount(0)
 })
 
-test('chart can be read with the keyboard', async ({ page }) => {
+test('chart can be opened and read with the keyboard', async ({ page }) => {
   await mockApis(page)
-  await page.goto('./?room=12x11x8&leak=average&dev=box-fan-1.111.1&src=r')
-  const chart = page.locator('.chart-wrap svg')
-  await chart.focus()
+  await page.goto(answerUrl('r'))
+  await page.getByRole('button', { name: /See it hour by hour/ }).click()
+  await page.locator('.chart-wrap svg').focus()
   await page.keyboard.press('End')
   await expect(page.locator('.chart [aria-live="polite"]')).toContainText('outside')
   await page.getByRole('button', { name: 'Show as table' }).click()
   await expect(page.getByRole('region', { name: 'Hourly values' }).locator('tbody tr')).toHaveCount(96)
 })
 
+test('Start over returns to the first screen', async ({ page }) => {
+  await mockApis(page)
+  await page.goto(answerUrl('r'))
+  await page.getByRole('button', { name: 'Start over', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Check my room' })).toBeVisible()
+})
+
 test('checklist ticks persist across reloads', async ({ page }) => {
   await mockApis(page)
   await page.goto('./')
-  const box = page.getByLabel(/Run the air cleaners on high/)
-  await box.check()
+  await page.getByLabel(/Run the air cleaners on high/).check()
   await page.reload()
   await expect(page.getByLabel(/Run the air cleaners on high/)).toBeChecked()
 })
 
-test('no horizontal scrolling and no automatic accessibility violations', async ({ page }) => {
+test('no accessibility violations on the question and answer screens', async ({ page }) => {
   await mockApis(page)
-  await page.goto('./?room=12x11x8&leak=average&dev=box-fan-1.111.1&src=r')
-  await expect(page.locator('.chart-wrap svg')).toBeVisible()
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-  expect(overflow).toBeLessThanOrEqual(0)
-
-  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
-  expect(results.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([])
+  for (const url of ['./', answerUrl('m:175', '')]) {
+    await page.goto(url)
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeAttached()
+    if (url !== './') {
+      await page.getByRole('button', { name: /See it hour by hour/ }).click()
+      await page.getByText('More details and settings').click()
+    }
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    expect(overflow, url).toBeLessThanOrEqual(0)
+    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+    expect(results.violations.map((v) => `${v.id}: ${v.nodes.length}`), url).toEqual([])
+  }
 })
 
 test('fits a 320 px wide screen without sideways scrolling', async ({ page }) => {
   await mockApis(page)
   await page.setViewportSize({ width: 320, height: 700 })
-  for (const url of ['./', './?room=12x11x8&leak=average&dev=box-fan-1.111.1~purifier.250.2&src=r']) {
+  for (const url of ['./', answerUrl('m:175', '')]) {
     await page.goto(url)
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeAttached()
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     expect(overflow, url).toBeLessThanOrEqual(0)
   }
-})
-
-test('a purifier can be entered by the room size on its box', async ({ page }) => {
-  await mockApis(page)
-  await page.goto('./?room=12x12x8&leak=average&src=m:175')
-  await expect(page.locator('.summary h2')).toHaveText('Your room needs more air cleaning')
-  await page.getByRole('button', { name: 'Add another air cleaner' }).click()
-  await page.getByLabel('Room size on the label').fill('600')
-  await expect(page.locator('.summary h2')).toHaveText('Your room will stay healthy to breathe')
-})
-
-test('room size presets change the result without measuring', async ({ page }) => {
-  await mockApis(page)
-  await page.goto('./?room=10x10x8&leak=average&dev=box-fan-1.111.1&src=m:175')
-  await expect(page.getByRole('radio', { name: /Small bedroom/ })).toBeChecked()
-  const peak = page.locator('.compare-plan .aqi-num')
-  const small = Number(await peak.textContent())
-  await page.getByText('Living room').click()
-  await expect.poll(async () => Number(await peak.textContent())).toBeGreaterThan(small)
-  await expect(page.getByText('What to do')).toBeVisible()
 })
